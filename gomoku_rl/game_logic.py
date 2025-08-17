@@ -1,4 +1,7 @@
+# gomoku-rl/gomoku_rl/game_logic.py
+
 import numpy as np
+import copy
 
 class GomokuGame:
     """
@@ -12,8 +15,30 @@ class GomokuGame:
         self.game_over = False
         self.winner = None
 
-    def make_move(self, row, col):
+    # --- THIS IS THE CORRECT PLACEMENT FOR CLONE ---
+    def clone(self):
+        """Creates a deep copy of the game state."""
+        return copy.deepcopy(self)
+
+    def get_board_state(self):
+        """
+        Returns the board state as a multi-channel numpy array for the neural network.
+        Channel 1: Current player's stones
+        Channel 2: Opponent's stones
+        Channel 3: Indicator of whose turn it is
+        """
+        player = self.current_player
+        opponent = 2 if player == 1 else 1
+
+        player_stones = np.where(self.board == player, 1, 0)
+        opponent_stones = np.where(self.board == opponent, 1, 0)
+        turn_indicator = np.full((self.board_size, self.board_size), player - 1) # 0 for P1, 1 for P2
+
+        return np.stack([player_stones, opponent_stones, turn_indicator])
+
+    def make_move(self, move):
         """Places a stone on the board and checks for a win."""
+        row, col = move
         if self.board[row, col] != 0 or self.game_over:
             return False  # Invalid move
 
@@ -22,11 +47,10 @@ class GomokuGame:
         if self._check_win(row, col):
             self.game_over = True
             self.winner = self.current_player
-        elif not self.get_valid_moves(): # No more valid moves
+        elif not self.get_valid_moves():
             self.game_over = True
-            self.winner = 0 # 0 signifies a draw
+            self.winner = 0
         else:
-            # Switch player
             self.current_player = 2 if self.current_player == 1 else 1
             
         return True
@@ -36,40 +60,27 @@ class GomokuGame:
         return list(zip(*np.where(self.board == 0)))
 
     def _check_win(self, row, col):
-        """
-        Checks if the last move at (row, col) resulted in a win.
-        This is more efficient than checking the entire board.
-        """
         player = self.board[row, col]
-        
-        # Directions to check: horizontal, vertical, and two diagonals
         directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
-        
         for dr, dc in directions:
             count = 1
-            # Check in the positive direction (e.g., right, down, down-right)
             for i in range(1, self.win_condition):
                 r, c = row + i * dr, col + i * dc
                 if 0 <= r < self.board_size and 0 <= c < self.board_size and self.board[r, c] == player:
                     count += 1
                 else:
                     break
-            
-            # Check in the negative direction (e.g., left, up, up-left)
             for i in range(1, self.win_condition):
                 r, c = row - i * dr, col - i * dc
                 if 0 <= r < self.board_size and 0 <= c < self.board_size and self.board[r, c] == player:
                     count += 1
                 else:
                     break
-            
             if count >= self.win_condition:
                 return True
-                
         return False
 
     def display(self):
-        """Prints the board to the console."""
         print("   " + " ".join([f"{i:2}" for i in range(self.board_size)]))
         print("  " + "-" * (self.board_size * 3))
         for i, row in enumerate(self.board):
